@@ -9,43 +9,44 @@ import os
 from datetime import datetime
 
 class App:
-	
+
 	def __init__(self):
 		#~ the local database connection
-		self.sqlite_conn = None		
+		self.sqlite_conn = None
 		#~ the remote database connection
 		self.pgsql_conn = None
-				
+
 		#~ open the config file, and parse the options into local vars
 		config = configparser.ConfigParser()
 		config.read('config.ini')
 		self.db_connection_string = config['db']['connection_string']
 		self.local_db_connection_string = config['local_db']['connection_string']
 		self.itersize = int(config['db']['itersize'])
-		
+
 		#~ open the database connections
 		self.open_db_connections()
-		
+
 		#~ create the table if it doesn't exist
 		self.create_local_table()
-		
+
 		#~ fill the local database with newer values from the transaction table
 		self.fill_local_db()
-	
+
+
 	def open_db_connections(self):
-		#~ connect to the sierra postgresql server		
+		#~ connect to the sierra postgresql server
 		try:
 			self.pgsql_conn = psycopg2.connect(self.db_connection_string)
-		
+
 		except psycopg2.Error as e:
 			print("unable to connect to sierra database: %s" % e)
-			
+
 		#~ connect to the local sqlite database
 		try:
 			self.sqlite_conn = sqlite3.connect(self.local_db_connection_string)
 		except sqlite3.Error as e:
 			print("unable to connect to local database: %s" % e)
-	
+
 
 	def close_connections(self):
 		print("closing database connections...")
@@ -54,14 +55,14 @@ class App:
 				print("closing pgsql_conn")
 				self.pgsql_conn.close()
 				self.pgsql_conn = None
-				
+
 		if self.sqlite_conn:
 			if hasattr(self.sqlite_conn, 'close'):
 				print("closing sqlite_conn")
 				self.sqlite_conn.close()
 				self.sqlite_conn = None
-	
-	
+
+
 	def create_local_table(self):
 		# create the table if it doesn't exist
 		sql = """
@@ -99,7 +100,7 @@ class App:
 	#~ trans_id, and return it.
 	def get_local_max(self, by_deletion_date=False):
 		print('by_deletion_date: {}'.format(by_deletion_date))
-		if by_deletion_date == True:
+		if by_deletion_date == False:
 			sql = """
 			SELECT
 			IFNULL(MAX(record_last_updated_epoch), 0) as max
@@ -131,12 +132,12 @@ class App:
 
 	def gen_sierra_bibs(self, start_epoc, null_deletion_date=True):
 		"""
-		
-		here, we'd like to search for bib's where the update time is 
+
+		here, we'd like to search for bib's where the update time is
 		less than the last updated record from our local database
-		
+
 		"""
-		
+
 		sql = """
 		SELECT
 		r.id,
@@ -166,7 +167,7 @@ class App:
 			AND v.varfield_type_code || v.marc_tag = 'o001'
 			-- and v.marc_tag = '001'
 
-			ORDER BY 
+			ORDER BY
 			v.occ_num
 
 			LIMIT 1
@@ -176,9 +177,9 @@ class App:
 		(
 			SELECT
 			CASE
-				WHEN v.field_content ~* '\(ocolc\)[0-9]{6,}' 
+				WHEN v.field_content ~* '\(ocolc\)[0-9]{6,}'
 				THEN true
-				ELSE false	
+				ELSE false
 			END
 
 			FROM
@@ -189,7 +190,7 @@ class App:
 			AND v.varfield_type_code || v.marc_tag = 'o035'
 			-- and v.marc_tag = '001'
 
-			ORDER BY 
+			ORDER BY
 			v.occ_num
 
 			LIMIT 1
@@ -199,7 +200,7 @@ class App:
 		(
 			SELECT
 			CASE
-				WHEN v.field_content ~* '\(ocolc\)[0-9]{6,}' 
+				WHEN v.field_content ~* '\(ocolc\)[0-9]{6,}'
 				THEN (regexp_matches(v.field_content, '[0-9]{6,}', 'gi'))[1]
 				ELSE v.field_content
 			END
@@ -212,7 +213,7 @@ class App:
 			AND v.varfield_type_code || v.marc_tag = 'o035'
 			-- and v.marc_tag = '001'
 
-			ORDER BY 
+			ORDER BY
 			v.occ_num
 
 			LIMIT 1

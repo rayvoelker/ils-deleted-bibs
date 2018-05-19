@@ -1,5 +1,6 @@
 env/
 *.ini
 *.db
+*.db-journal
 testing/
 old_work/
