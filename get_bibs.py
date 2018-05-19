@@ -64,6 +64,8 @@ class App:
 
 
 	def create_local_table(self):
+		cursor = self.sqlite_conn.cursor()
+		
 		# create the table if it doesn't exist
 		sql = """
 		CREATE TABLE IF NOT EXISTS `bib_data` (
@@ -88,10 +90,24 @@ class App:
 			PRIMARY KEY(`bib_id`,`record_last_updated_epoch`,`deletion_epoch`)
 		);
 		"""
-		#~ debug
-		#~ print("{}".format( type(self.sqlite_conn)) )
-		cursor = self.sqlite_conn.cursor()
 		cursor.execute(sql)
+		
+		sql = """
+		CREATE INDEX `bib_id_index` ON `bib_data` (`bib_id` )
+		"""
+		cursor.execute(sql)
+		
+		sql = """
+		CREATE INDEX `deletion_epoch_index` ON `bib_data` (`deletion_epoch` DESC)
+		"""
+		cursor.execute(sql)
+		
+		sql = """
+		CREATE INDEX `record_last_updated_epoch_index` ON `bib_data` (`record_last_updated_epoch` DESC)
+		"""
+		cursor.execute(sql)
+		
+		self.sqlite_conn.commit()		
 		cursor.close()
 		cursor = None
 
