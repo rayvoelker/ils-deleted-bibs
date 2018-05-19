@@ -93,17 +93,17 @@ class App:
 		cursor.execute(sql)
 		
 		sql = """
-		CREATE INDEX `bib_id_index` ON `bib_data` (`bib_id` )
+		CREATE UNIQUE INDEX IF NOT EXISTS `bib_id_index` ON `bib_data` (`bib_id` DESC)
 		"""
 		cursor.execute(sql)
 		
 		sql = """
-		CREATE INDEX `deletion_epoch_index` ON `bib_data` (`deletion_epoch` DESC)
+		CREATE INDEX IF NOT EXISTS `deletion_epoch_index` ON `bib_data` (`deletion_epoch` DESC)
 		"""
 		cursor.execute(sql)
 		
 		sql = """
-		CREATE INDEX `record_last_updated_epoch_index` ON `bib_data` (`record_last_updated_epoch` DESC)
+		CREATE INDEX IF NOT EXISTS `record_last_updated_epoch_index` ON `bib_data` (`record_last_updated_epoch` DESC)
 		"""
 		cursor.execute(sql)
 		
