@@ -1,0 +1,6 @@
+[db]
+	connection_string = dbname='iii' user='PUT_USERNAME_HERE' host='sierra-db.YOURLIBRARY.ORG' password='PUT_PASSWORD_HERE' port=1032 sslmode='require'
+	itersize = 5000
+
+[local_db]
+	connection_string = transactions.db

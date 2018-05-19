@@ -1,0 +1,5 @@
+env/
+*.ini
+*.db
+testing/
+old_work/
