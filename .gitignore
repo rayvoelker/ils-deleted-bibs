@@ -4,3 +4,4 @@ env/
 *.db-journal
 testing/
 old_work/
+.xz
