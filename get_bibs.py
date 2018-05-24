@@ -29,8 +29,13 @@ class App:
 		#~ create the table if it doesn't exist
 		self.create_local_table()
 
-		#~ fill the local database with newer values from the transaction table
-		self.fill_local_db()
+		#~ fill the local database with updated and new bib record data 
+		#~ from the transaction table
+		self.fill_local_db(deleted=False)
+		
+		#~ now fill the local database with deleted bib record data from 
+		#~ the transaction table
+		self.fill_local_db(deleted=True)
 
 
 	def open_db_connections(self):
@@ -114,9 +119,9 @@ class App:
 
 	#~ create the table 'data' if it doesn't exist. Grab the largest
 	#~ trans_id, and return it.
-	def get_local_max(self, by_deletion_date=False):
-		print('by_deletion_date: {}'.format(by_deletion_date))
-		if by_deletion_date == False:
+	def get_local_max(self, deleted=False):
+		print('doing deleted?: {}'.format(deleted))
+		if deleted == False:
 			sql = """
 			SELECT
 			IFNULL(MAX(record_last_updated_epoch), 0) as max
@@ -126,7 +131,7 @@ class App:
 
 			LIMIT 1
 			"""
-		else:
+		elif deleted == True:
 			sql = """
 			SELECT
 			IFNULL(MAX(deletion_epoch), 0) as max
@@ -146,7 +151,7 @@ class App:
 		return max_id
 
 
-	def gen_sierra_bibs(self, start_epoc, null_deletion_date=True):
+	def gen_sierra_bibs(self, start_epoc, deleted=False):
 		"""
 
 		here, we'd like to search for bib's where the update time is
@@ -254,10 +259,12 @@ class App:
 		AND r.record_last_updated_gmt > to_timestamp(%s)
 		"""
 
-		if null_deletion_date == True:
+		if deleted == False:
 			sql += str("AND r.deletion_date_gmt IS NULL")
-		else:
+		elif deleted == True:
 			sql += str("AND r.deletion_date_gmt IS NOT NULL")
+
+		print("start_epoc: {}\nsql :{}".format(start_epoc, sql))
 
 		#~ debug
 		#~ sql += "  LIMIT 5000"
@@ -282,75 +289,123 @@ class App:
 		cursor.close()
 
 
-	def fill_local_db(self):
+	def fill_local_db(self, deleted=False):
 		"""
-		This is going to be a little tricky. First we have to try to do an insert on the id,
-		and then if that insert fails, we want to do an update on that record.
+		
+		Fill the local database by updated / new bibs or update select 
+		fields for deleted bib, therefore preserving some metadata for 
+		those records
 
-		The update will be different than the insert, as we will have
-		less data, since the record has been deleted, we no longer have
-		some fields that we want to now preserve in the local database
-
-		There are a few ways we can do this:
-
+		one possible way to accomplish this: 
 		https://stackoverflow.com/questions/2717590/sqlite-insert-on-duplicate-key-update
+
 		"""
 
-		local_max = self.get_local_max(by_deletion_date=False)
+		#~ insert or replace into our table, the updated or new bib 
+		#~ record data		
+		if deleted == False:
+			sql = """
+			INSERT OR REPLACE INTO
+			bib_data (
+				'bib_id', --0 INTEGER NOT NULL UNIQUE,
+				'record_num', --1 INTEGER,
+				'record_last_updated', --2 TEXT
+				'record_last_updated_epoch', --3 REAL,
+				'creation_date', --4 TEXT,
+				'deletion_date', --5 TEXT,
+				'deletion_epoch', --6 TEXT,
+				'cataloging_date', --7 TEXT,
+				'best_title', --8 TEXT,
+				'best_author', --9 TEXT,
+				'publish_year', --10 INTEGER,
+				'bib_level_code', --11 TEXT,
+				'material_code', --12 TEXT,
+				'language_code', --13 TEXT,
+				'country_code', --14 TEXT,
+				'control_num_001',  --15 TEXT,
+				'control_num_035_is_oclc', --16 INTEGER,
+				'control_num_035' --17 TEXT
+			)
 
+			VALUES (
+				?, --0
+				?, --1
+				?, --2
+				?, --3
+				?, --4
+				?, --5
+				?, --6
+				?, --7
+				?, --8
+				?, --9
+				?, --10
+				?, --11
+				?, --12
+				?,  --13
+				?,  --14
+				?,  --15
+				?,  --16
+				?  --17
+			)
+			"""
+			
+		elif deleted == True:
+			sql = """
+			INSERT OR REPLACE INTO
+			bib_data (
+				'bib_id', --0 INTEGER NOT NULL UNIQUE,
+				'record_num', --1 INTEGER,
+				'record_last_updated', --2 TEXT
+				'record_last_updated_epoch', --3 REAL,
+				'creation_date', --4 TEXT,
+				'deletion_date', --5 REAL,
+				'deletion_epoch', --6 TEXT,
+				'cataloging_date', --7 TEXT,
+				'best_title', --8 TEXT,
+				'best_author', --9 TEXT,
+				'publish_year', --10 INTEGER,
+				'bib_level_code', --11 TEXT,
+				'material_code', --12 TEXT,
+				'language_code', --13 TEXT,
+				'country_code', --14 TEXT,
+				'control_num_001',  --15 TEXT,
+				'control_num_035_is_oclc', --16 INTEGER,
+				'control_num_035' --17 TEXT
+			)
+
+			VALUES (
+				?, --0	420909816679
+				?, --1	3021671
+				?, --2	"2016-06-15" 
+				?, --3	1466014679.0
+				?, --4	"2015-01-19"
+				?, --5	null
+				?, --6	0.0
+				-- preserve the rest if it had existed before
+				(SELECT cataloging_date FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1), --7	"2015-01-19"
+				(SELECT best_title FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1), --8	"Dogwood Hill [electronic resource]"
+				(SELECT best_author FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1), --9	"Woods, Sherryl, author."
+				(SELECT publish_year FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1), --10	2015
+				(SELECT bib_level_code FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1), --11	"m"
+				(SELECT material_code FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1), --12	"2"
+				(SELECT language_code FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1),  --13 "eng"
+				(SELECT country_code FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1),  --14 "onc"
+				(SELECT control_num_001 FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1),  --15 "|aovd84EB6AB7-71B7-47C2-8AC5-847A6B209530"
+				(SELECT control_num_035_is_oclc FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1),  --16 null
+				(SELECT control_num_035 FROM bib_data WHERE bib_data.bib_id = ? LIMIT 1)  --17 null
+			)
+			
+			"""
+			
+			
+		#~ get the local max (sending if deleted or not)
+		local_max = self.get_local_max(deleted)
 		print('starting with max date: \t{}'.format(local_max))
-
-		sql = """
-		INSERT OR REPLACE INTO
-		bib_data (
-			'bib_id', --0 INTEGER NOT NULL UNIQUE,
-			'record_num', --1 INTEGER,
-			'record_last_updated', --2 TEXT
-			'record_last_updated_epoch', --3 REAL,
-			'creation_date', --4 TEXT,
-			'deletion_date', --5 TEXT,
-			'deletion_epoch', --6 TEXT,
-			'cataloging_date', --7 TEXT,
-			'best_title', --8 TEXT,
-			'best_author', --9 TEXT,
-			'publish_year', --10 INTEGER,
-			'bib_level_code', --11 TEXT,
-			'material_code', --12 TEXT,
-			'language_code', --13 TEXT,
-			'country_code', --14 TEXT,
-			'control_num_001',  --15 TEXT,
-			'control_num_035_is_oclc', --16 INTEGER,
-			'control_num_035' --17 TEXT
-		)
-
-		VALUES (
-			?, --0
-			?, --1
-			?, --2
-			?, --3
-			?, --4
-			?, --5
-			?, --6
-			?, --7
-			?, --8
-			?, --9
-			?, --10
-			?, --11
-			?, --12
-			?,  --13
-			?,  --14
-			?,  --15
-			?,  --16
-			?  --17
-		)
-		"""
-
 		cursor = self.sqlite_conn.cursor()
 
 		counter = 0
-
-		#~ first update all the bibs with null for deletion date
-		for row in self.gen_sierra_bibs(local_max, True):
+		
+		for row in self.gen_sierra_bibs(local_max, deleted):
 
 			#~ debug
 			#~ print(row)
@@ -370,28 +425,54 @@ class App:
 			else:
 				deletion_epoch = float(row['deletion_epoch'])
 
-			values = (
-				int(row['id']),
-				int(row['record_num']),
-				row['record_last_update'],
-				record_last_updated_epoch,
-				row['creation_date_gmt'],
-				row['deletion_date_gmt'],
-				deletion_epoch,
-				row['cataloging_date_gmt'],
-				row['best_title'],
-				row['best_author'],
-				row['publish_year'],
-				row['bib_level_code'],
-				row['material_code'],
-				row['language_code'],
-				row['country_code'],
-				row['control_num_001'],
-				row['control_num_035_is_oclc'],
-				row['control_num_035']
-			)
 			
+			#~ set the values depending on if we're inserting deleted 
+			#~ values or not
 			
+			if deleted == False:
+				values = (
+					int(row['id']),
+					int(row['record_num']),
+					row['record_last_update'],
+					record_last_updated_epoch,
+					row['creation_date_gmt'],
+					row['deletion_date_gmt'],
+					deletion_epoch,
+					row['cataloging_date_gmt'],
+					row['best_title'],
+					row['best_author'],
+					row['publish_year'],
+					row['bib_level_code'],
+					row['material_code'],
+					row['language_code'],
+					row['country_code'],
+					row['control_num_001'],
+					row['control_num_035_is_oclc'],
+					row['control_num_035']
+				)
+				
+			elif deleted == True:
+				values = (
+					int(row['id']),
+					int(row['record_num']),
+					row['record_last_update'],
+					record_last_updated_epoch,
+					row['creation_date_gmt'],
+					row['deletion_date_gmt'],
+					deletion_epoch,
+					row['cataloging_date_gmt'],
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id']),
+					int(row['id'])
+				)
+
 			#~ debug
 			#~ print(values)
 			
