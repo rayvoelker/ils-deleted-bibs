@@ -256,15 +256,29 @@ class App:
 
 		WHERE
 		r.record_type_code || r.campus_code = 'b'
-		AND r.record_last_updated_gmt > to_timestamp(%s)
+		
 		"""
 
 		if deleted == False:
+			sql += str("AND r.record_last_updated_gmt > to_timestamp(%s)\n")
 			sql += str("AND r.deletion_date_gmt IS NULL")
 		elif deleted == True:
-			sql += str("AND r.deletion_date_gmt IS NOT NULL")
-
-		print("start_epoc: {}\nsql :{}".format(start_epoc, sql))
+			sql += str("AND r.deletion_date_gmt IS NOT NULL\n")
+			"""
+			there isn't very much precision when it comes to deleted 
+			records, so the date is going to have to do. We have to be 
+			careful to grab dates after our max deletion date, and 
+			exactly matching because of the lack of precision
+			
+			tldr;we're going to have to grab every deleted from the 
+			date of the last deleted record because there's no 
+			timestamp on the deletion_date_gmt field :(
+			
+			"""
+			sql += str("AND r.deletion_date_gmt::date >= to_timestamp(%s)::date")
+			
+		#~ debug
+		#~ print("start_epoc: {}\nsql :{}".format(start_epoc, sql))
 
 		#~ debug
 		#~ sql += "  LIMIT 5000"
@@ -499,15 +513,16 @@ class App:
 			if(counter % self.itersize == 0):
 				self.sqlite_conn.commit()
 				print('counter: {}'.format(counter))
-				print('id: {}'.format(row[0]))
+				print('id: {}'.format(row['id']))
 				print(values)
 		
 		self.sqlite_conn.commit()
-		#~ TODO:
-		#~ fix the error "UnboundLocalError: local variable 'row' referenced before assignment"
-		#~ I believe it happens where there are no transactions fetched?
-		print('finishing with id: \t{}'.format(row[0]))
-		print('final count inserted: \t\t{}'.format(counter))
+		#~ fixes the error "UnboundLocalError: local variable 'row' 
+		#~ referenced before assignment" where there are no rows returned 
+		#~ from query		
+		if 'row[0]' in locals():
+			print('finishing with id: \t{}'.format(row['id']))
+		print('final count inserted ("deleted"?:{}): \t\t{}'.format(deleted, counter))
 		cursor.close()
 		cursor = None
 
