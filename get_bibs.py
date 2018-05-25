@@ -35,6 +35,15 @@ class App:
 		
 		#~ now fill the local database with deleted bib record data from 
 		#~ the transaction table
+		
+		#~ TODO:
+		#~ consider doing this only once a day, or maybe, take "deleted" 
+		#~ as a paramater of the constructor, so we don't necessarily do 
+		#~ it every time. Since we're going to be forced to insert the 
+		#~ same deleted records that match the date of the last deleted 
+		#~ record (because of lack of a timestamp, or date precision on 
+		#~ the "deleted_date_gmt" field
+		
 		self.fill_local_db(deleted=True)
 
 
